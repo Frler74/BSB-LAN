@@ -14,5 +14,6 @@ custom_floats[0] = 0;                   // débit L/min (param 20700)
 custom_floats[1] = water_total_liters;  // volume total L (param 20701)
 
 attachInterrupt(digitalPinToInterrupt(WATER_METER_PIN), water_meter_isr, FALLING);
+printFmtToDebug("Water meter: interrupt attached on GPIO%d, idle pin_state=%d (should be 1/HIGH if wiring OK)\r\n", WATER_METER_PIN, digitalRead(WATER_METER_PIN));
 #endif
 

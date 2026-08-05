@@ -22,6 +22,8 @@ if (custom_timer > custom_timer_compare+60000) {    // every 60 seconds
     unsigned long water_delta_pulses = water_pulses_now - water_pulses_at_last_calc;
     float water_elapsed_min = (water_now_ms - water_last_calc_ms) / 60000.0;
 
+    printFmtToDebug("Water debug: raw_isr_count=%lu delta=%lu pin_state=%d\r\n", water_pulses_now, water_delta_pulses, digitalRead(WATER_METER_PIN));
+
     custom_floats[0] = (water_elapsed_min > 0) ? (water_delta_pulses / water_elapsed_min) : 0; // L/min, param 20700
 
     if (water_delta_pulses > 0) {
