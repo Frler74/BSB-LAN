@@ -1,12 +1,13 @@
 // Add custom code for global functions here which will be included in the global section
 
-// --- Compteur d'eau (reed switch 2 fils, GPIO14, 1 impulsion = 1 litre) ---
+// --- Compteur d'eau (reed switch 2 fils, GPIO22, 1 impulsion = 1 litre) ---
 // Migré depuis l'ESP32 "water-meter" (ESPHome, pulse_meter). Débit -> custom_floats[0] (param 20700),
 // volume total -> custom_floats[1] (param 20701). Fonctionne en parallèle de l'ESPHome le temps de valider.
+// GPIO14 (rangée gauche) inaccessible physiquement -> GPIO22 (rangée droite, libre : pas SD/bus/EEPROM-erase/USB).
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
 #include <Preferences.h>
 
-#define WATER_METER_PIN 14
+#define WATER_METER_PIN 22
 #define WATER_METER_DEBOUNCE_US 200000UL       // 200 ms anti-rebond, comme le filtre ESPHome d'origine
 #define WATER_METER_CALC_INTERVAL_MS 5000UL    // recalcul du débit toutes les 5 s
 #define WATER_METER_SAVE_INTERVAL_MS 300000UL  // sauvegarde NVS toutes les 5 min (usure flash)
