@@ -21,6 +21,7 @@ Preferences waterPrefs;
 volatile unsigned long water_pulse_isr_count = 0;
 volatile unsigned long water_last_pulse_us = 0;
 volatile unsigned long water_last_pulse_interval_us = 0;  // temps entre les 2 dernières impulsions, pour un débit précis
+volatile unsigned long water_isr_wrong_state_count = 0;   // diagnostic : nb de déclenchements avec pin HIGH (FALLING qui se comporterait comme CHANGE)
 
 unsigned long water_total_liters = 0;
 unsigned long water_pulses_at_last_calc = 0;
@@ -28,6 +29,10 @@ unsigned long water_last_calc_ms = 0;
 unsigned long water_last_save_ms = 0;
 
 void IRAM_ATTR water_meter_isr() {
+  if (digitalRead(WATER_METER_PIN) != LOW) {
+    water_isr_wrong_state_count++;   // diagnostic : ISR déclenchée alors que la broche n'est pas basse
+    return;
+  }
   unsigned long now = micros();
   unsigned long since_last = now - water_last_pulse_us;
   if (since_last > WATER_METER_DEBOUNCE_US) {

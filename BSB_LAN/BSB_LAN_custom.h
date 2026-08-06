@@ -32,7 +32,7 @@ if (custom_timer > custom_timer_compare+60000) {    // every 60 seconds
       custom_floats[0] = 0;
     }
 
-    printFmtToDebug("Water debug: raw_isr_count=%lu delta=%lu pin_state=%d flow=%.2f last_interval_ms=%lu debounce_ms=%lu\r\n", water_pulses_now, water_delta_pulses, digitalRead(WATER_METER_PIN), custom_floats[0], water_last_interval_us / 1000, WATER_METER_DEBOUNCE_US / 1000);
+    printFmtToDebug("Water debug: raw_isr_count=%lu delta=%lu pin_state=%d flow=%.2f last_interval_ms=%lu debounce_ms=%lu wrong_state_rejects=%lu\r\n", water_pulses_now, water_delta_pulses, digitalRead(WATER_METER_PIN), custom_floats[0], water_last_interval_us / 1000, WATER_METER_DEBOUNCE_US / 1000, water_isr_wrong_state_count);
 
     if (water_delta_pulses > 0) {
       water_total_liters += water_delta_pulses;       // 1 impulsion = 1 litre
