@@ -10,14 +10,16 @@
 
 #define WATER_METER_PIN 4
 #define WATER_METER_DEBOUNCE_US 200000UL       // 200 ms anti-rebond, comme le filtre ESPHome d'origine
-#define WATER_METER_CALC_INTERVAL_MS 5000UL    // recalcul du débit toutes les 5 s
+#define WATER_METER_CALC_INTERVAL_MS 5000UL    // rafraîchissement de l'affichage du débit toutes les 5 s
 #define WATER_METER_SAVE_INTERVAL_MS 300000UL  // sauvegarde NVS toutes les 5 min (usure flash)
 #define WATER_METER_SEED_LITERS 165UL          // valeur relevée sur l'ESPHome au moment de la migration (05/08/2026)
+#define WATER_METER_TIMEOUT_US 120000000UL     // 2 min sans impulsion -> débit affiché à 0 (comme ESPHome)
 
 Preferences waterPrefs;
 
 volatile unsigned long water_pulse_isr_count = 0;
 volatile unsigned long water_last_pulse_us = 0;
+volatile unsigned long water_last_pulse_interval_us = 0;  // temps entre les 2 dernières impulsions, pour un débit précis
 
 unsigned long water_total_liters = 0;
 unsigned long water_pulses_at_last_calc = 0;
@@ -26,7 +28,9 @@ unsigned long water_last_save_ms = 0;
 
 void IRAM_ATTR water_meter_isr() {
   unsigned long now = micros();
-  if (now - water_last_pulse_us > WATER_METER_DEBOUNCE_US) {
+  unsigned long since_last = now - water_last_pulse_us;
+  if (since_last > WATER_METER_DEBOUNCE_US) {
+    water_last_pulse_interval_us = since_last;
     water_pulse_isr_count++;
     water_last_pulse_us = now;
   }
