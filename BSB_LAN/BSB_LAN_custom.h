@@ -9,37 +9,42 @@ if (custom_timer > custom_timer_compare+60000) {    // every 60 seconds
   printFmtToDebug("%lu Ping!\r\n", millis());
 }
 
-// --- Compteur d'eau : calcul du débit + volume total, sauvegarde périodique ---
+// --- Compteur d'eau : scrutation du contact (durée continue à l'état bas), calcul du débit, sauvegarde ---
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
 {
   unsigned long water_now_ms = millis();
+  bool water_pin_low_now = (digitalRead(WATER_METER_PIN) == LOW);
+
+  if (water_pin_low_now && !water_pin_was_low) {
+    water_low_since_ms = water_now_ms;
+    water_pulse_counted_this_low = false;
+  }
+
+  if (water_pin_low_now && !water_pulse_counted_this_low && (water_now_ms - water_low_since_ms) >= WATER_METER_STABLE_LOW_MS) {
+    water_pulse_count++;
+    water_pulse_counted_this_low = true;
+    if (water_last_valid_pulse_ms > 0) {
+      water_last_pulse_interval_ms = water_now_ms - water_last_valid_pulse_ms;
+    }
+    water_last_valid_pulse_ms = water_now_ms;
+    water_total_liters++;                          // 1 impulsion = 1 litre
+    custom_floats[1] = water_total_liters;          // L, param 20701
+    printFmtToDebug("Water debug: pulse counted, total=%lu interval_ms=%lu\r\n", water_total_liters, water_last_pulse_interval_ms);
+  }
+
+  water_pin_was_low = water_pin_low_now;
 
   if (water_now_ms - water_last_calc_ms >= WATER_METER_CALC_INTERVAL_MS) {
-    noInterrupts();
-    unsigned long water_pulses_now = water_pulse_isr_count;
-    unsigned long water_last_interval_us = water_last_pulse_interval_us;
-    unsigned long water_last_pulse_time_us = water_last_pulse_us;
-    interrupts();
+    unsigned long water_since_last_pulse_ms = water_now_ms - water_last_valid_pulse_ms;
 
-    unsigned long water_delta_pulses = water_pulses_now - water_pulses_at_last_calc;
-    unsigned long water_since_last_pulse_us = micros() - water_last_pulse_time_us;
-
-    // Débit basé sur le temps réel entre les 2 dernières impulsions (comme ESPHome pulse_meter),
-    // pas sur une moyenne de fenêtre fixe -> valeur précise et réactive plutôt que quantifiée par paliers.
-    if (water_pulses_now >= 2 && water_since_last_pulse_us < WATER_METER_TIMEOUT_US) {
-      custom_floats[0] = 60000000.0 / water_last_interval_us; // L/min, param 20700
+    if (water_pulse_count >= 2 && water_last_valid_pulse_ms > 0 && water_since_last_pulse_ms < WATER_METER_TIMEOUT_MS) {
+      custom_floats[0] = 60000.0 / water_last_pulse_interval_ms; // L/min, param 20700
     } else {
       custom_floats[0] = 0;
     }
 
-    printFmtToDebug("Water debug: raw_isr_count=%lu delta=%lu pin_state=%d flow=%.2f last_interval_ms=%lu debounce_ms=%lu wrong_state_rejects=%lu\r\n", water_pulses_now, water_delta_pulses, digitalRead(WATER_METER_PIN), custom_floats[0], water_last_interval_us / 1000, WATER_METER_DEBOUNCE_US / 1000, water_isr_wrong_state_count);
+    printFmtToDebug("Water debug: total_pulses=%lu flow=%.2f pin_state=%d\r\n", water_pulse_count, custom_floats[0], !water_pin_low_now);
 
-    if (water_delta_pulses > 0) {
-      water_total_liters += water_delta_pulses;       // 1 impulsion = 1 litre
-      custom_floats[1] = water_total_liters;           // L, param 20701
-    }
-
-    water_pulses_at_last_calc = water_pulses_now;
     water_last_calc_ms = water_now_ms;
   }
 
