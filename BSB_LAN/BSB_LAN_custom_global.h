@@ -9,7 +9,7 @@
 #include <Preferences.h>
 
 #define WATER_METER_PIN 4
-#define WATER_METER_DEBOUNCE_US 200000UL       // 200 ms anti-rebond, comme le filtre ESPHome d'origine
+#define WATER_METER_DEBOUNCE_US 400000UL       // 400 ms anti-rebond (200ms insuffisant : sur-comptage ~2x observé face à l'ESPHome)
 #define WATER_METER_CALC_INTERVAL_MS 5000UL    // rafraîchissement de l'affichage du débit toutes les 5 s
 #define WATER_METER_SAVE_INTERVAL_MS 300000UL  // sauvegarde NVS toutes les 5 min (usure flash)
 #define WATER_METER_SEED_LITERS 165UL          // valeur relevée sur l'ESPHome au moment de la migration (05/08/2026)
