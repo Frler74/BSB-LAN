@@ -13,6 +13,7 @@ water_last_save_ms = millis();
 custom_floats[0] = 0;                   // débit L/min (param 20700)
 custom_floats[1] = water_total_liters;  // volume total L (param 20701)
 
-printFmtToDebug("Water meter: polling GPIO%d (no interrupt), idle pin_state=%d (should be 1/HIGH if wiring OK)\r\n", WATER_METER_PIN, digitalRead(WATER_METER_PIN));
+attachInterrupt(digitalPinToInterrupt(WATER_METER_PIN), water_meter_isr, CHANGE);
+printFmtToDebug("Water meter: CHANGE interrupt attached on GPIO%d, idle pin_state=%d (should be 1/HIGH if wiring OK)\r\n", WATER_METER_PIN, digitalRead(WATER_METER_PIN));
 #endif
 

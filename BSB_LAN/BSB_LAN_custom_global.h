@@ -6,17 +6,23 @@
 // GPIO14 (rangée gauche) inaccessible physiquement -> GPIO22 essayé mais réservé par Wire.begin() (I2C SCL,
 // appelé sans condition dans le setup()) -> GPIO4 (rangée droite, libre, non utilisé hors cartes Olimex).
 //
-// Historique : l'approche par interruption (FALLING) + anti-rebond par écart de temps entre impulsions a
-// donné un sur-comptage ~2x stable et reproductible face à l'ESPHome (confirmé même isolé, sans l'ESPHome
-// branché), insensible à un anti-rebond de 200 à 800ms et à un condensateur matériel de 100nF. Abandon de
-// cette approche au profit d'une mesure de durée réelle de fermeture du contact (scrutation, sans
-// interruption), identique au principe du filtre PULSE d'ESPHome qui, lui, fonctionne correctement sur ce
-// même capteur.
+// Historique :
+// 1) Interruption FALLING + anti-rebond par écart de temps entre impulsions -> sur-comptage ~2x stable,
+//    reproductible même isolé de l'ESPHome, insensible à 200-800ms d'anti-rebond et à un condensateur 100nF.
+// 2) Scrutation logicielle (sans interruption) de la durée continue à l'état bas -> correct sur tests lents
+//    contrôlés (bidons 5L/2L/1L, précision parfaite), mais sous-comptage ~10% mesuré à débit soutenu
+//    (arrosage, ~6-7 L/min) : loop() sur BSB-LAN n'est pas régulier (bloqué 100-300ms+ pendant les requêtes
+//    sur le bus de chauffage), donc une impulsion brève peut survenir entièrement entre deux passages de
+//    boucle et n'être jamais vue.
+// 3) Solution actuelle : interruption sur les deux fronts (CHANGE), horodatage micros() précis à chaque
+//    front, largeur réelle de l'impulsion calculée (front montant - front descendant), comptée seulement
+//    si elle dépasse le seuil. Identique au principe du filtre PULSE d'ESPHome, mais implémenté par
+//    interruption matérielle (immunisé aux irrégularités de loop()) plutôt que par scrutation logicielle.
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
 #include <Preferences.h>
 
 #define WATER_METER_PIN 4
-#define WATER_METER_STABLE_LOW_MS 200UL        // durée continue à l'état bas requise pour valider une impulsion (comme ESPHome internal_filter: 200ms)
+#define WATER_METER_STABLE_LOW_US 150000UL     // largeur minimale d'impulsion validée (150ms, comme ESPHome internal_filter)
 #define WATER_METER_CALC_INTERVAL_MS 5000UL    // rafraîchissement de l'affichage du débit toutes les 5 s
 #define WATER_METER_SAVE_INTERVAL_MS 300000UL  // sauvegarde NVS toutes les 5 min (usure flash)
 #define WATER_METER_SEED_LITERS 165UL          // valeur relevée sur l'ESPHome au moment de la migration (05/08/2026)
@@ -24,15 +30,31 @@
 
 Preferences waterPrefs;
 
-bool water_pin_was_low = false;
-bool water_pulse_counted_this_low = false;
-unsigned long water_low_since_ms = 0;
-unsigned long water_pulse_count = 0;
-unsigned long water_last_valid_pulse_ms = 0;
-unsigned long water_last_pulse_interval_ms = 0;
+volatile unsigned long water_fall_time_us = 0;
+volatile unsigned long water_pulse_count = 0;
+volatile unsigned long water_last_valid_pulse_us = 0;
+volatile unsigned long water_last_pulse_interval_us = 0;
 
 unsigned long water_total_liters = 0;
 unsigned long water_pulses_at_last_calc = 0;
 unsigned long water_last_calc_ms = 0;
 unsigned long water_last_save_ms = 0;
+
+void IRAM_ATTR water_meter_isr() {
+  unsigned long now = micros();
+  if (digitalRead(WATER_METER_PIN) == LOW) {
+    // front descendant : le contact vient de se fermer
+    water_fall_time_us = now;
+  } else {
+    // front montant : le contact vient de se rouvrir -> calcule la largeur réelle de la fermeture
+    unsigned long width = now - water_fall_time_us;
+    if (width >= WATER_METER_STABLE_LOW_US) {
+      water_pulse_count++;
+      if (water_last_valid_pulse_us > 0) {
+        water_last_pulse_interval_us = now - water_last_valid_pulse_us;
+      }
+      water_last_valid_pulse_us = now;
+    }
+  }
+}
 #endif
