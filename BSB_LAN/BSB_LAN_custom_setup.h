@@ -5,7 +5,9 @@
 pinMode(WATER_METER_PIN, INPUT_PULLUP);
 
 waterPrefs.begin("watermtr", false);
+waterPrefs.remove("total");             // TEMPORAIRE : force la reprise de WATER_METER_SEED_LITERS -- à retirer une fois la resynchro confirmée
 water_total_liters = waterPrefs.getULong("total", WATER_METER_SEED_LITERS);
+waterPrefs.putULong("total", water_total_liters);
 
 water_last_calc_ms = millis();
 water_last_save_ms = millis();

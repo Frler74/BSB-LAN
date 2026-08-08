@@ -31,7 +31,7 @@
 #define WATER_METER_STABLE_LOW_US 150000UL     // largeur minimale d'impulsion validée (150ms, comme ESPHome internal_filter)
 #define WATER_METER_CALC_INTERVAL_MS 5000UL    // rafraîchissement de l'affichage du débit toutes les 5 s
 #define WATER_METER_SAVE_INTERVAL_MS 300000UL  // sauvegarde NVS toutes les 5 min (usure flash)
-#define WATER_METER_SEED_LITERS 165UL          // valeur relevée sur l'ESPHome au moment de la migration (05/08/2026)
+#define WATER_METER_SEED_LITERS 309UL          // resynchronisé sur le total réel ESPHome au moment de la validation finale (08/08/2026)
 #define WATER_METER_TIMEOUT_MS 120000UL        // 2 min sans impulsion -> débit affiché à 0 (comme ESPHome)
 
 Preferences waterPrefs;
