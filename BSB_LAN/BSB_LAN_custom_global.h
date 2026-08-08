@@ -14,10 +14,16 @@
 //    (arrosage, ~6-7 L/min) : loop() sur BSB-LAN n'est pas régulier (bloqué 100-300ms+ pendant les requêtes
 //    sur le bus de chauffage), donc une impulsion brève peut survenir entièrement entre deux passages de
 //    boucle et n'être jamais vue.
-// 3) Solution actuelle : interruption sur les deux fronts (CHANGE), horodatage micros() précis à chaque
-//    front, largeur réelle de l'impulsion calculée (front montant - front descendant), comptée seulement
-//    si elle dépasse le seuil. Identique au principe du filtre PULSE d'ESPHome, mais implémenté par
-//    interruption matérielle (immunisé aux irrégularités de loop()) plutôt que par scrutation logicielle.
+// 3) Interruption CHANGE, horodatage micros() à chaque front, largeur mesurée (montant - descendant) ->
+//    sur-comptage erratique ~3.5x, pire qu'avant. Cause : water_fall_time_us était réinitialisé à CHAQUE
+//    front descendant, y compris un rebond de refermeture survenant au milieu d'une fermeture déjà en
+//    cours -> chaque rebond pendant une fermeture longue pouvait être évalué comme sa propre impulsion
+//    valide (largeur mesurée depuis le rebond précédent, pas depuis la vraie fermeture initiale).
+// 4) Solution actuelle : mêmes interruptions CHANGE, mais un drapeau "impulsion en cours" empêche de
+//    redémarrer le chrono sur un rebond de refermeture -> le chrono ne démarre qu'à la toute première
+//    fermeture, et la largeur n'est mesurée/validée qu'au relâchement final. Reproduit fidèlement le
+//    principe du filtre PULSE d'ESPHome (qui ne traite un front que si l'état logique a réellement changé
+//    par rapport au dernier état connu).
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
 #include <Preferences.h>
 
@@ -31,6 +37,7 @@
 Preferences waterPrefs;
 
 volatile unsigned long water_fall_time_us = 0;
+volatile bool water_pulse_in_progress = false;
 volatile unsigned long water_pulse_count = 0;
 volatile unsigned long water_last_valid_pulse_us = 0;
 volatile unsigned long water_last_pulse_interval_us = 0;
@@ -43,17 +50,24 @@ unsigned long water_last_save_ms = 0;
 void IRAM_ATTR water_meter_isr() {
   unsigned long now = micros();
   if (digitalRead(WATER_METER_PIN) == LOW) {
-    // front descendant : le contact vient de se fermer
-    water_fall_time_us = now;
+    // front descendant : ne démarre le chrono que si aucune fermeture n'est déjà en cours
+    // (ignore les rebonds de refermeture au milieu d'une fermeture déjà commencée)
+    if (!water_pulse_in_progress) {
+      water_fall_time_us = now;
+      water_pulse_in_progress = true;
+    }
   } else {
-    // front montant : le contact vient de se rouvrir -> calcule la largeur réelle de la fermeture
-    unsigned long width = now - water_fall_time_us;
-    if (width >= WATER_METER_STABLE_LOW_US) {
-      water_pulse_count++;
-      if (water_last_valid_pulse_us > 0) {
-        water_last_pulse_interval_us = now - water_last_valid_pulse_us;
+    // front montant : ne finalise que si une fermeture était en cours
+    if (water_pulse_in_progress) {
+      unsigned long width = now - water_fall_time_us;
+      if (width >= WATER_METER_STABLE_LOW_US) {
+        water_pulse_count++;
+        if (water_last_valid_pulse_us > 0) {
+          water_last_pulse_interval_us = now - water_last_valid_pulse_us;
+        }
+        water_last_valid_pulse_us = now;
       }
-      water_last_valid_pulse_us = now;
+      water_pulse_in_progress = false;
     }
   }
 }
